@@ -79,18 +79,13 @@ WSGI_APPLICATION = 'docusai_project.wsgi.application'
 
 
 # Database configuration
-import pymysql
-pymysql.install_as_MySQLdb()
+import dj_database_url
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'signup_db',
-        'USER': 'root',
-        'PASSWORD': 'Luke_2021',
-        'HOST': 'localhost',
-        'PORT': '3306',
-    }
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3'),
+        conn_max_age=600
+    )
 }
 
 
