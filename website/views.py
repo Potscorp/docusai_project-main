@@ -653,53 +653,65 @@ def forgot_password(request):
         from django.contrib.auth.models import User as AuthUser
         from .models import PasswordResetToken
         import secrets
-        from django.core.mail import send_mail
-        from django.utils import timezone
+        from django.urls import reverse
 
         try:
             user = AuthUser.objects.get(email=email)
-            # Invalidate old tokens
             PasswordResetToken.objects.filter(user=user, used=False).update(used=True)
-            # Create new token
             token = secrets.token_hex(32)
             PasswordResetToken.objects.create(user=user, token=token)
 
-            from django.urls import reverse
             domain = request.get_host()
             protocol = 'https' if request.is_secure() else 'http'
             reset_path = reverse('website:reset_password', kwargs={'token': token})
             reset_url = f"{protocol}://{domain}{reset_path}"
+            username = user.username
 
-            send_mail(
-                subject='Reset your DocusAI password',
-                message=f'Hi {user.username}, reset your password here: {reset_url} (expires in 1 hour)',
-                from_email=None,
-                recipient_list=[email],
-                html_message=f"""
-                <html>
-                <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-                    <div style="text-align:center;padding:30px 0;">
-                        <h1 style="color:#2563EB;font-size:28px;margin-bottom:8px;">DocusAI</h1>
-                        <p style="color:#64748B;font-size:14px;">AI Health Platform</p>
-                    </div>
-                    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:32px;">
-                        <h2 style="color:#0F172A;font-size:22px;margin-bottom:12px;">Reset your password</h2>
-                        <p style="color:#334155;font-size:15px;margin-bottom:8px;">Hi <strong>{user.username}</strong>,</p>
-                        <p style="color:#334155;font-size:15px;margin-bottom:24px;">We received a request to reset your DocusAI account password. Click the button below to set a new password.</p>
-                        <div style="text-align:center;margin:28px 0;">
-                            <a href="{reset_url}" style="display:inline-block;background:#2563EB;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Reset Password</a>
+            def send_reset_email():
+                try:
+                    sender_email = "geethageetha7817@gmail.com"
+                    sender_password = "egkw lkki fzxp giir"
+                    msg = MIMEMultipart('alternative')
+                    msg['From'] = sender_email
+                    msg['To'] = email
+                    msg['Subject'] = 'Reset your DocusAI password'
+                    html_body = f"""
+                    <html>
+                    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+                        <div style="text-align:center;padding:30px 0;">
+                            <h1 style="color:#2563EB;font-size:28px;margin-bottom:8px;">DocusAI</h1>
+                            <p style="color:#64748B;font-size:14px;">AI Health Platform</p>
                         </div>
-                        <p style="color:#64748B;font-size:13px;margin-bottom:8px;">This link expires in <strong>1 hour</strong>.</p>
-                        <p style="color:#64748B;font-size:13px;">If the button doesn't work, copy and paste this link into your browser:</p>
-                        <p style="word-break:break-all;color:#2563EB;font-size:13px;margin-top:6px;">{reset_url}</p>
-                    </div>
-                    <p style="color:#94A3B8;font-size:12px;text-align:center;margin-top:24px;">If you didn't request a password reset, you can safely ignore this email. Your password will not change.</p>
-                </body>
-                </html>
-                """,
-            )
+                        <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:32px;">
+                            <h2 style="color:#0F172A;font-size:22px;margin-bottom:12px;">Reset your password</h2>
+                            <p style="color:#334155;font-size:15px;margin-bottom:8px;">Hi <strong>{username}</strong>,</p>
+                            <p style="color:#334155;font-size:15px;margin-bottom:24px;">We received a request to reset your DocusAI account password. Click the button below to set a new password.</p>
+                            <div style="text-align:center;margin:28px 0;">
+                                <a href="{reset_url}" style="display:inline-block;background:#2563EB;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Reset Password</a>
+                            </div>
+                            <p style="color:#64748B;font-size:13px;margin-bottom:8px;">This link expires in <strong>1 hour</strong>.</p>
+                            <p style="color:#64748B;font-size:13px;">If the button doesn't work, copy and paste this link:</p>
+                            <p style="word-break:break-all;color:#2563EB;font-size:13px;margin-top:6px;">{reset_url}</p>
+                        </div>
+                        <p style="color:#94A3B8;font-size:12px;text-align:center;margin-top:24px;">If you didn't request this, you can safely ignore this email.</p>
+                    </body>
+                    </html>
+                    """
+                    msg.attach(MIMEText(html_body, 'html'))
+                    server = smtplib.SMTP('smtp.gmail.com', 587)
+                    server.starttls()
+                    server.login(sender_email, sender_password)
+                    server.send_message(msg)
+                    server.quit()
+                except Exception as e:
+                    print(f"Reset email error: {e}")
+
+            thread = threading.Thread(target=send_reset_email)
+            thread.daemon = True
+            thread.start()
+
         except AuthUser.DoesNotExist:
-            pass  # Don't reveal if email exists
+            pass
 
         messages.success(request, 'If that email is registered, a reset link has been sent.')
         return redirect('website:forgot_password')
