@@ -648,7 +648,95 @@ def pricing(request):
     return render(request, 'website/pricing.html')
 
 def forgot_password(request):
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip()
+        from django.contrib.auth.models import User as AuthUser
+        from .models import PasswordResetToken
+        import secrets
+        from django.core.mail import send_mail
+        from django.utils import timezone
+
+        try:
+            user = AuthUser.objects.get(email=email)
+            # Invalidate old tokens
+            PasswordResetToken.objects.filter(user=user, used=False).update(used=True)
+            # Create new token
+            token = secrets.token_hex(32)
+            PasswordResetToken.objects.create(user=user, token=token)
+
+            from django.urls import reverse
+            domain = request.get_host()
+            protocol = 'https' if request.is_secure() else 'http'
+            reset_path = reverse('website:reset_password', kwargs={'token': token})
+            reset_url = f"{protocol}://{domain}{reset_path}"
+
+            send_mail(
+                subject='Reset your DocusAI password',
+                message=f'Hi {user.username}, reset your password here: {reset_url} (expires in 1 hour)',
+                from_email=None,
+                recipient_list=[email],
+                html_message=f"""
+                <html>
+                <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+                    <div style="text-align:center;padding:30px 0;">
+                        <h1 style="color:#2563EB;font-size:28px;margin-bottom:8px;">DocusAI</h1>
+                        <p style="color:#64748B;font-size:14px;">AI Health Platform</p>
+                    </div>
+                    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:32px;">
+                        <h2 style="color:#0F172A;font-size:22px;margin-bottom:12px;">Reset your password</h2>
+                        <p style="color:#334155;font-size:15px;margin-bottom:8px;">Hi <strong>{user.username}</strong>,</p>
+                        <p style="color:#334155;font-size:15px;margin-bottom:24px;">We received a request to reset your DocusAI account password. Click the button below to set a new password.</p>
+                        <div style="text-align:center;margin:28px 0;">
+                            <a href="{reset_url}" style="display:inline-block;background:#2563EB;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">Reset Password</a>
+                        </div>
+                        <p style="color:#64748B;font-size:13px;margin-bottom:8px;">This link expires in <strong>1 hour</strong>.</p>
+                        <p style="color:#64748B;font-size:13px;">If the button doesn't work, copy and paste this link into your browser:</p>
+                        <p style="word-break:break-all;color:#2563EB;font-size:13px;margin-top:6px;">{reset_url}</p>
+                    </div>
+                    <p style="color:#94A3B8;font-size:12px;text-align:center;margin-top:24px;">If you didn't request a password reset, you can safely ignore this email. Your password will not change.</p>
+                </body>
+                </html>
+                """,
+            )
+        except AuthUser.DoesNotExist:
+            pass  # Don't reveal if email exists
+
+        messages.success(request, 'If that email is registered, a reset link has been sent.')
+        return redirect('website:forgot_password')
+
     return render(request, 'website/forgot-password.html')
+
+
+def reset_password(request, token):
+    from .models import PasswordResetToken
+    try:
+        reset_token = PasswordResetToken.objects.get(token=token, used=False)
+        if reset_token.is_expired():
+            messages.error(request, 'This reset link has expired. Please request a new one.')
+            return redirect('website:forgot_password')
+    except PasswordResetToken.DoesNotExist:
+        messages.error(request, 'Invalid or already used reset link.')
+        return redirect('website:forgot_password')
+
+    if request.method == 'POST':
+        password = request.POST.get('password')
+        confirm = request.POST.get('confirm_password')
+        if password != confirm:
+            messages.error(request, 'Passwords do not match.')
+            return render(request, 'website/reset-password.html', {'token': token})
+        if len(password) < 8:
+            messages.error(request, 'Password must be at least 8 characters.')
+            return render(request, 'website/reset-password.html', {'token': token})
+
+        reset_token.user.set_password(password)
+        reset_token.user.save()
+        reset_token.used = True
+        reset_token.save()
+        messages.success(request, 'Password updated successfully. Please sign in.')
+        return redirect('website:signin')
+
+    return render(request, 'website/reset-password.html', {'token': token})
+
 
 @login_required(login_url='website:signin')
 def reminder_page(request):

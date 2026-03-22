@@ -23,6 +23,7 @@ urlpatterns = [
     path('signin/', views.signin, name='signin'),
     path('signout/', views.signout, name='signout'),
     path('forgot-password/', views.forgot_password, name='forgot_password'),
+    path('reset-password/<str:token>/', views.reset_password, name='reset_password'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('reminder/', views.reminder_page, name='reminder'),
     path('send-reminder/', views.send_reminder, name='send_reminder'),

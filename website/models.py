@@ -42,6 +42,19 @@ class Doctor(models.Model):
     def __str__(self):
         return self.name
 
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
+    def is_expired(self):
+        from django.utils import timezone
+        return (timezone.now() - self.created_at).total_seconds() > 3600  # 1 hour
+
+    def __str__(self):
+        return f"Reset token for {self.user.email}"
+
 class Appointment(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
     patient_name = models.CharField(max_length=100)
